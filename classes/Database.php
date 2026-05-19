@@ -9,8 +9,8 @@ class Database {
             // Vamos redefinir manualmente:
             $host = 'localhost';
             $dbname = 'chat_whatsapp';
-            $user = 'root';          // ajuste conforme seu MySQL
-            $pass = '1';        // ajuste
+            $user = 'root';         
+            $pass = '1';        
             try {
                 self::$pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
                 self::$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
