@@ -4,7 +4,6 @@ require_once 'Atendimento.php';
 require_once 'Mensagem.php';
 require_once 'RoundRobin.php';
 require_once 'Setor.php';
-require_once '../config/database.php';
 require_once '../config/app.php';
 
 class WebhookHandler

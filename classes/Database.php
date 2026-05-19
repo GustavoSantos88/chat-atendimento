@@ -1,16 +1,15 @@
 <?php
-class Database {
+class Database
+{
     private static $pdo = null;
 
-    public static function getConn() {
+    public static function getConn()
+    {
         if (self::$pdo === null) {
-            $config = require_once __DIR__ . '/../config/database.php';
-            // Se database.php retornar um array, use-o. Mas o original define variáveis.
-            // Vamos redefinir manualmente:
             $host = 'localhost';
             $dbname = 'chat_whatsapp';
-            $user = 'root';         
-            $pass = '1';        
+            $user = 'root';
+            $pass = '1';
             try {
                 self::$pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
                 self::$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -23,4 +22,3 @@ class Database {
         return self::$pdo;
     }
 }
-?>
