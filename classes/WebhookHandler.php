@@ -84,10 +84,15 @@ class WebhookHandler
                 // $texto = $atendenteId ? "✅ Atendimento iniciado com {$proximoAtendente['nome']}. Envie sua mensagem." : "⏳ Você está na fila. Em breve será atendido.";
                 $protocolo = $novo['protocolo'];
                 $texto = $atendenteId
-                    ? "✅ *Atendimento #{$protocolo}* iniciado com {$proximoAtendente['nome']}. Envie sua mensagem."
-                    : "⏳ *Atendimento #{$protocolo}* criado. Você está na fila. Em breve um atendente estará disponível.";
+                    ? "✅ *Olá seja bem vindo!* \n\n*Protocolo: {$protocolo}* \nAtendimento iniciado com {$proximoAtendente['nome']}. \nEnvie sua mensagem."
+                    : "⏳ *Olá seja bem vindo!* \n\n*Protocolo: {$protocolo}* criado. \nVocê está na fila. \nEm breve um atendente estará disponível.";
 
                 self::enviarWhatsApp($sessionId, $telefone, $texto);
+
+                $texto = $atendenteId
+                    ? "✅ Olá seja bem vindo! \n\nProtocolo: {$protocolo} \nAtendimento iniciado com {$proximoAtendente['nome']}. \n\nEnvie sua mensagem."
+                    : "⏳ Olá seja bem vindo! \n\nProtocolo: {$protocolo} criado. \nVocê está na fila. \nEm breve um atendente estará disponível.";
+
                 Mensagem::salvar($novo['id'], $sessionId, 'sistema', 'saida', 'texto', $texto, null, date('Y-m-d H:i:s'));
                 self::emitirEvento('novoAtendimento', ['atendimento' => $novo, 'setor_id' => $setorId]);
             } else {

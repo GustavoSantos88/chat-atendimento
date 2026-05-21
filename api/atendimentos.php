@@ -39,7 +39,7 @@ if ($method === 'GET') {
         if (!empty($status)) {
             $sql .= " AND a.status = :status";
         }
-        $sql .= " ORDER BY a.data_abertura ASC";
+        $sql .= " ORDER BY a.data_abertura DESC";
         $stmt = $pdo->prepare($sql);
         if ($setor_id) $stmt->bindParam(':setor_id', $setor_id, PDO::PARAM_INT);
         if (!empty($status)) $stmt->bindParam(':status', $status, PDO::PARAM_STR);
@@ -53,7 +53,7 @@ if ($method === 'GET') {
             LEFT JOIN setores s ON a.setor_id = s.id
             WHERE a.status IN ('aberto', 'transferido')
               AND a.atendente_atual_id = ?
-            ORDER BY a.data_abertura ASC
+            ORDER BY a.data_abertura DESC
         ";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$_SESSION['atendente_id']]);
@@ -149,7 +149,7 @@ if ($method === 'POST' && isset($_GET['action'])) {
             $pdo->commit();
 
             // Enviar mensagem ao cliente (opcional, mas desejável)
-            $mensagemCliente = "🔄 Seu atendimento foi transferido para *{$nomeNovoAtendente}*. Aguarde um momento.";
+            $mensagemCliente = "🔄 Seu atendimento foi transferido para *{$nomeNovoAtendente}*. \nAguarde um momento.";
             $url = BASE_URL_API . 'api/send';
             $postData = ['sessionId' => $sessionId, 'number' => $telefoneCliente, 'message' => $mensagemCliente];
             $ch = curl_init($url);
@@ -214,7 +214,7 @@ if ($method === 'POST' && isset($_GET['action'])) {
             if ($clienteData) {
                 $telefone = $clienteData['telefone'];
                 $sessionId = $clienteData['session_id'];
-                $mensagemEncerramento = "✅ Seu atendimento foi finalizado. Agradecemos o contato! Caso precise, inicie um novo atendimento enviando uma mensagem.";
+                $mensagemEncerramento = "✅ *Seu atendimento foi finalizado.* \n\nAgradecemos o contato! \nCaso precise, inicie um novo atendimento enviando uma mensagem.";
 
                 // Usa a mesma configuração que funciona no WebhookHandler
                 $url = BASE_URL_API . 'api/send';

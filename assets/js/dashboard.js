@@ -219,7 +219,7 @@ window.initChat = function () {
 
         const avatarLetter = nome ? nome.charAt(0).toUpperCase() : '?';
         const isAdmin = (window.atendenteId == 1);
-        const blockedStatus = ['finalizado', 'transferido'];
+        const blockedStatus = ['finalizado'];
         // Atendente comum vê botões apenas se status não estiver bloqueado
         const showActions = !blockedStatus.includes(status?.toLowerCase());
 

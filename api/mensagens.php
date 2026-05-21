@@ -27,7 +27,7 @@ if ($method === 'GET') {
 
     if (!$is_admin) {
         // Verifica se o atendimento pertence ao atendente logado
-        $stmt = $pdo->prepare("SELECT atendente_atual_id FROM atendimentos WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT atendente_atual_id FROM atendimentos WHERE id = ? ORDER BY data_envio ASC, created_at ASC");
         $stmt->execute([$atendimento_id]);
         $atend = $stmt->fetch();
         if (!$atend || $atend['atendente_atual_id'] != $_SESSION['atendente_id']) {
@@ -77,6 +77,8 @@ if ($method === 'GET') {
 
     // Salvar mensagem do atendente    
     $msgId = Mensagem::salvar($atendimento_id, $session_id, 'atendente', 'saida', 'texto', $mensagem, null, date('Y-m-d H:i:s'), $_SESSION['atendente_nome']);
+
+    $mensagem = "*" . $_SESSION['atendente_nome'] . ":*" . "\n\n" . trim($mensagem);
 
     // Enviar mensagem via API zapcloud
     $url = BASE_URL_API . 'api/send';
