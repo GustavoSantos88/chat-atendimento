@@ -1,5 +1,5 @@
 /* =============================================
-   Reset e base
+   RESET E BASE
    ============================================= */
 * {
     box-sizing: border-box;
@@ -14,7 +14,7 @@ body {
 }
 
 /* =============================================
-   Container principal (WhatsApp)
+   CONTAINER PRINCIPAL (WHATSAPP)
    ============================================= */
 .whatsapp-container {
     display: flex;
@@ -24,7 +24,7 @@ body {
 }
 
 /* =============================================
-   Sidebar (lista de conversas)
+   SIDEBAR (LISTA DE CONVERSAS)
    ============================================= */
 .sidebar {
     width: 320px;
@@ -139,7 +139,7 @@ body {
 }
 
 /* =============================================
-   Área do chat (principal)
+   ÁREA DO CHAT (PRINCIPAL)
    ============================================= */
 .chat-area {
     flex: 1;
@@ -178,6 +178,19 @@ body {
     color: #25d366;
 }
 
+.system-message {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6c757d;
+    background: #f8f9fa;
+    padding: 6px 12px;
+    border-radius: 20px;
+    margin: 8px auto;
+    width: fit-content;
+    max-width: 80%;
+    font-style: italic;
+}
+
 .messages-container {
     flex: 1;
     overflow-y: auto;
@@ -207,8 +220,8 @@ body {
     padding: 8px 12px;
     border-radius: 18px;
     box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
-    position: relative;
     word-wrap: break-word;
+    word-break: break-word;
     font-size: 0.9rem;
     max-width: 100%;
 }
@@ -290,7 +303,7 @@ body {
 }
 
 /* =============================================
-   Toast container e mensagens
+   TOAST
    ============================================= */
 .toast-container {
     position: fixed;
@@ -337,7 +350,7 @@ body {
 }
 
 /* =============================================
-   Tela de login responsiva
+   TELA DE LOGIN RESPONSIVA
    ============================================= */
 .login-container {
     display: flex;
@@ -387,11 +400,10 @@ body {
 }
 
 /* =============================================
-   Botão de menu e sidebar ocultável (mobile)
+   MENU E SIDEBAR OCULTÁVEL (MOBILE)
    ============================================= */
 .menu-toggle {
     display: none;
-    /* oculto por padrão */
     background: transparent;
     border: none;
     font-size: 1.6rem;
@@ -406,7 +418,6 @@ body {
     color: #128c7e;
 }
 
-/* Sidebar overlay */
 .sidebar-overlay {
     position: fixed;
     top: 0;
@@ -423,7 +434,7 @@ body {
 }
 
 /* =============================================
-   Responsividade (tablet e celular)
+   RESPONSIVIDADE
    ============================================= */
 @media (max-width: 768px) {
     .sidebar {
@@ -487,6 +498,8 @@ body {
 
     .conversation-lastmsg {
         font-size: 0.7rem;
+        white-space: normal;
+        word-break: break-word;
     }
 
     .message {
@@ -523,4 +536,48 @@ body {
     .sidebar-overlay {
         display: none !important;
     }
+}
+
+/* =============================================
+   DIVISORES DE ATENDIMENTO (HISTÓRICO)
+   ============================================= */
+.atendimento-divider {
+    margin: 20px 0;
+    text-align: center;
+}
+
+.atendimento-divider hr {
+    margin: 8px 0;
+    border-top: 1px solid #ddd;
+}
+
+.atendimento-divider .divider-content {
+    background: #f0f2f5;
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 30px;
+    font-size: 0.8rem;
+    color: #333;
+    max-width: 90%;
+}
+
+/* Finalizado */
+.atendimento-divider.divider-end .divider-content {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Aberto / ativo */
+.atendimento-divider.divider-active .divider-content {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+/* Transferido */
+.atendimento-divider.divider-transfer .divider-content {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
 }

@@ -16,31 +16,68 @@ $method = $_SERVER['REQUEST_METHOD'];
 $pdo = Database::getConn();
 
 if ($method === 'GET') {
-    $atendimento_id = $_GET['atendimento_id'] ?? 0;
-    if (!$atendimento_id) {
-        http_response_code(400);
-        echo json_encode(['erro' => 'atendimento_id é obrigatório']);
+    $cliente_id = isset($_GET['cliente_id']) ? (int)$_GET['cliente_id'] : 0;
+    $atendimento_id = isset($_GET['atendimento_id']) ? (int)$_GET['atendimento_id'] : 0;
+
+    if ($cliente_id > 0) {
+        // $is_admin = ($_SESSION['atendente_id'] == 1);
+        // if (!$is_admin) {
+        //     // Atendente comum não tem permissão; retorna array vazio (evita erro 403 no console)
+        //     echo json_encode([]);
+        //     exit;
+        // }
+
+        // Ordem cronológica: mais antigo primeiro (ASC)
+        $sql = "
+            SELECT m.*, 
+                   a.protocolo, 
+                   a.id as atendimento_id, 
+                   a.status as atendimento_status, 
+                   a.data_abertura as atendimento_data_abertura,
+                   a.data_fechamento as atendimento_data_fechamento,
+                   a.setor_id
+            FROM mensagens m
+            JOIN atendimentos a ON m.atendimento_id = a.id
+            WHERE a.cliente_id = ?
+            ORDER BY a.data_abertura ASC, m.data_envio ASC, m.created_at ASC
+        ";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$cliente_id]);
+        $mensagens = $stmt->fetchAll();
+        echo json_encode($mensagens);
         exit;
     }
 
-    $is_admin = ($_SESSION['atendente_id'] == 1);
+    if ($atendimento_id > 0) {
+        $is_admin = ($_SESSION['atendente_id'] == 1);
 
-    if (!$is_admin) {
-        // Verifica se o atendimento pertence ao atendente logado
-        $stmt = $pdo->prepare("SELECT atendente_atual_id FROM atendimentos WHERE id = ? ORDER BY data_envio ASC, created_at ASC");
-        $stmt->execute([$atendimento_id]);
-        $atend = $stmt->fetch();
-        if (!$atend || $atend['atendente_atual_id'] != $_SESSION['atendente_id']) {
-            http_response_code(403);
-            echo json_encode(['erro' => 'Acesso negado']);
-            exit;
+        if (!$is_admin) {
+            $stmt = $pdo->prepare("SELECT atendente_atual_id FROM atendimentos WHERE id = ?");
+            $stmt->execute([$atendimento_id]);
+            $atend = $stmt->fetch();
+            if (!$atend) {
+                http_response_code(404);
+                echo json_encode(['erro' => 'Atendimento não encontrado']);
+                exit;
+            }
+            if ($atend['atendente_atual_id'] != $_SESSION['atendente_id']) {
+                error_log("Acesso negado para atendente {$_SESSION['atendente_id']} no atendimento $atendimento_id (atendente atual: {$atend['atendente_atual_id']})");
+                http_response_code(403);
+                echo json_encode(['erro' => 'Acesso negado: você não é o atendente atual deste atendimento']);
+                exit;
+            }
         }
+
+        // Ordem cronológica dentro do atendimento: mais antiga primeiro
+        $stmt = $pdo->prepare("SELECT * FROM mensagens WHERE atendimento_id = ? ORDER BY data_envio ASC, created_at ASC");
+        $stmt->execute([$atendimento_id]);
+        $mensagens = $stmt->fetchAll();
+        echo json_encode($mensagens);
+        exit;
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM mensagens WHERE atendimento_id = ? ORDER BY data_envio ASC, created_at ASC");
-    $stmt->execute([$atendimento_id]);
-    $mensagens = $stmt->fetchAll();
-    echo json_encode($mensagens);
+    http_response_code(400);
+    echo json_encode(['erro' => 'Parâmetro obrigatório: atendimento_id ou cliente_id']);
     exit;
 } elseif ($method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -64,7 +101,6 @@ if ($method === 'GET') {
     $is_admin = ($_SESSION['atendente_id'] == 1);
 
     if (!$is_admin) {
-        // Verifica se o atendimento pertence ao atendente
         $stmt = $pdo->prepare("SELECT atendente_atual_id FROM atendimentos WHERE id = ?");
         $stmt->execute([$atendimento_id]);
         $atend = $stmt->fetch();
@@ -75,18 +111,11 @@ if ($method === 'GET') {
         }
     }
 
-    // Salvar mensagem do atendente    
     $msgId = Mensagem::salvar($atendimento_id, $session_id, 'atendente', 'saida', 'texto', $mensagem, null, date('Y-m-d H:i:s'), $_SESSION['atendente_nome']);
-
     $mensagem = "*" . $_SESSION['atendente_nome'] . ":*" . "\n\n" . trim($mensagem);
 
-    // Enviar mensagem via API zapcloud
     $url = BASE_URL_API . 'api/send';
-    $postData = [
-        'sessionId' => $session_id,
-        'number'    => $telefone,
-        'message'   => $mensagem
-    ];
+    $postData = ['sessionId' => $session_id, 'number' => $telefone, 'message' => $mensagem];
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));

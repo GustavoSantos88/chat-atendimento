@@ -1,5 +1,5 @@
 // /assets/js/atendimento.js
-const atendimentoId = window.atendimentoId;
+const atendimentoId = window.atendenteId;
 const socket = io(window.socketUrl || 'http://localhost:3000', { transports: ['websocket', 'polling'] });
 socket.emit('joinAtendimento', atendimentoId);
 
@@ -8,19 +8,40 @@ function carregarMensagens() {
         .then(response => response.json())
         .then(data => {
             let html = '';
-            if (data.length === 0) {
+            if (!Array.isArray(data) || data.length === 0) {
                 html = '<div class="text-muted text-center">Nenhuma mensagem ainda</div>';
             } else {
                 data.forEach(msg => {
-                    // const classe = msg.remetente_tipo === 'cliente' ? 'client' : 'atendente';
-                    const classe = msg.remetente_tipo === 'cliente' ? 'received' : 'sent';
-                    html += `<div class="message ${classe}"><div class="bubble">${escapeHtml(msg.mensagem)}</div><div class="small text-muted">${msg.data_envio}</div></div>`;
+                    if (msg.remetente_tipo === 'sistema') {
+                        let texto = msg.mensagem || '';
+                        let mensagemTexto = formatarMensagem(texto);
+                        html += `<div class="system-message">${mensagemTexto}</div>`;
+                    } else {
+                        const classe = msg.remetente_tipo === 'cliente' ? 'received' : 'sent';
+                        let texto = msg.mensagem || '';
+                        let mensagemTexto = formatarMensagem(texto);
+                        let dataEnvio = msg.data_envio ? new Date(msg.data_envio).toLocaleString() : 'data não disponível';
+                        html += `
+                            <div class="message ${classe}">
+                                <div class="bubble">${mensagemTexto}</div>
+                                <div class="small text-muted">${dataEnvio}</div>
+                            </div>
+                        `;
+                    }
                 });
             }
             document.getElementById('chat-box').innerHTML = html;
             document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
         })
         .catch(() => toast('Erro ao carregar mensagens', 'error'));
+}
+
+function formatarMensagem(texto) {
+    if (!texto) return '';
+    let msg = escapeHtml(texto);
+    msg = msg.replace(/\n/g, '<br>');
+    msg = msg.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+    return msg;
 }
 
 function escapeHtml(str) {
@@ -40,7 +61,7 @@ function enviarMsg() {
         return;
     }
     fetchWithToast(
-        'api/mensagens.php',
+        `${window.baseUrl}api/mensagens.php`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -60,7 +81,6 @@ function enviarMsg() {
 }
 
 function transferir() {
-
     if (!window.setorId) {
         toast('Setor não identificado', 'error');
         return;
@@ -73,7 +93,6 @@ function transferir() {
                 toast('Nenhum outro atendente disponível neste setor', 'info');
                 return;
             }
-            // Cria modal dinâmico
             let modalHtml = `
                 <div class="modal fade" id="transferModal" tabindex="-1">
                     <div class="modal-dialog">
@@ -87,7 +106,7 @@ function transferir() {
                                 <div class="list-group" id="listaAtendentes">
             `;
             atendentes.forEach(a => {
-                modalHtml += `<button type="button" class="list-group-item list-group-item-action" data-id="${a.id}">${a.nome}</button>`;
+                modalHtml += `<button type="button" class="list-group-item list-group-item-action" data-id="${a.id}">${escapeHtml(a.nome)}</button>`;
             });
             modalHtml += `
                                 </div>
@@ -96,19 +115,16 @@ function transferir() {
                     </div>
                 </div>
             `;
-            // Remove modal existente (se houver)
             if (document.getElementById('transferModal')) document.getElementById('transferModal').remove();
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             const modal = new bootstrap.Modal(document.getElementById('transferModal'));
             modal.show();
-            // Adiciona evento aos botões
             document.querySelectorAll('#listaAtendentes button').forEach(btn => {
                 btn.addEventListener('click', function () {
                     const novoId = this.getAttribute('data-id');
                     modal.hide();
-                    // Chama a transferência
                     fetchWithToast(
-                        'api/atendimentos.php?action=transferir',
+                        `${window.baseUrl}api/atendimentos.php?action=transferir`,
                         {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -128,7 +144,7 @@ function transferir() {
 function finalizar() {
     if (!confirm('Finalizar atendimento?')) return;
     fetchWithToast(
-        'api/atendimentos.php?action=finalizar',
+        `${window.baseUrl}api/atendimentos.php?action=finalizar`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -138,17 +154,17 @@ function finalizar() {
         'Erro ao finalizar'
     ).then(() => {
         return fetchWithToast(
-            'api/atendimentos.php?action=proximo',
+            `${window.baseUrl}api/atendimentos.php?action=proximo`,
             { method: 'GET' },
             'Próximo atendimento atribuído',
             'Nenhum atendimento na fila'
         );
     }).then(() => {
         setTimeout(() => {
-            window.location.href = window.baseUrl + 'views/dashboard.php';
+            window.location.reload();
         }, 800);
     }).catch(() => {
-        window.location.href = window.baseUrl + 'views/dashboard.php';
+        window.location.reload();
     });
 }
 
@@ -159,14 +175,13 @@ socket.on('novaMensagem', (data) => {
     }
 });
 
-// Fallback: recarregar mensagens automaticamente a cada 5 segundos
 setInterval(() => {
     if (atendimentoId && document.getElementById('chat-box')) {
         carregarMensagens();
     }
 }, 5000);
 
-// carregarMensagens();
+carregarMensagens();
 
 document.getElementById('msgInput').addEventListener('keypress', function (event) {
     if (event.key === 'Enter') {

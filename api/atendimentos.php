@@ -16,21 +16,79 @@ $method = $_SERVER['REQUEST_METHOD'];
 $pdo = Database::getConn();
 
 // --------------------------------------------------------------
-// GET
+// GET – Ações específicas (antes do agrupamento)
 // --------------------------------------------------------------
-// Se for action=get_setor, retorna o setor_id de um atendimento específico
+if ($method === 'GET' && isset($_GET['action'])) {
+    $action = $_GET['action'];
+
+    // Retorna atendimento ativo de um cliente
+    if ($action === 'get_ativo_por_cliente' && isset($_GET['cliente_id'])) {
+        $cliente_id = (int)$_GET['cliente_id'];
+        // Atendente comum só pode ver se já atendeu esse cliente (opcional, mas seguro)
+        // Vamos permitir qualquer atendente consultar, pois o front-end limita.
+        $stmt = $pdo->prepare("
+            SELECT id 
+            FROM atendimentos 
+            WHERE cliente_id = ? AND status IN ('aberto', 'transferido')
+            ORDER BY id DESC LIMIT 1
+        ");
+        $stmt->execute([$cliente_id]);
+        $row = $stmt->fetch();
+        echo json_encode(['atendimento_id' => $row ? $row['id'] : null]);
+        exit;
+    }
+
+    // Retorna session_id e setor_id de um atendimento específico
+    if ($action === 'get_dados_atendimento' && isset($_GET['id'])) {
+        $id = (int)$_GET['id'];
+        // Verifica permissão: atendente só pode ver dados se for o atendente atual (ou admin)
+        $is_admin = ($_SESSION['atendente_id'] == 1);
+        $sql = "SELECT session_id, setor_id FROM atendimentos WHERE id = ?";
+        if (!$is_admin) {
+            $sql .= " AND atendente_atual_id = ?";
+        }
+        $stmt = $pdo->prepare($sql);
+        if (!$is_admin) {
+            $stmt->execute([$id, $_SESSION['atendente_id']]);
+        } else {
+            $stmt->execute([$id]);
+        }
+        $data = $stmt->fetch();
+        if (!$data) {
+            http_response_code(403);
+            echo json_encode(['erro' => 'Acesso negado']);
+            exit;
+        }
+        echo json_encode($data);
+        exit;
+    }
+
+    // Se nenhuma action reconhecida, cai no agrupamento abaixo
+}
+
+// --------------------------------------------------------------
+// GET – Retorna clientes agrupados (um por cliente)
+// --------------------------------------------------------------
 if ($method === 'GET') {
     $is_admin = ($_SESSION['atendente_id'] == 1);
     $setor_id = isset($_GET['setor_id']) && is_numeric($_GET['setor_id']) ? (int)$_GET['setor_id'] : null;
-    $status = isset($_GET['status']) ? $_GET['status'] : '';
-    $status = trim($status);
+    $status = isset($_GET['status']) ? trim($_GET['status']) : '';
 
     if ($is_admin) {
+        // Admin: todos os clientes que possuem atendimentos
         $sql = "
-            SELECT a.*, c.nome as cliente_nome, c.telefone, s.nome as setor_nome
-            FROM atendimentos a
-            LEFT JOIN clientes c ON a.cliente_id = c.id
-            LEFT JOIN setores s ON a.setor_id = s.id
+            SELECT 
+                c.id as cliente_id,
+                c.nome as cliente_nome,
+                c.telefone,
+                MAX(a.id) as ultimo_atendimento_id,
+                (SELECT protocolo FROM atendimentos WHERE cliente_id = c.id ORDER BY id DESC LIMIT 1) as ultimo_protocolo,
+                (SELECT status FROM atendimentos WHERE cliente_id = c.id ORDER BY id DESC LIMIT 1) as ultimo_status,
+                (SELECT data_abertura FROM atendimentos WHERE cliente_id = c.id ORDER BY id DESC LIMIT 1) as ultima_data,
+                (SELECT setor_id FROM atendimentos WHERE cliente_id = c.id ORDER BY id DESC LIMIT 1) as ultimo_setor_id,
+                (SELECT s.nome FROM setores s WHERE s.id = ultimo_setor_id) as setor_nome
+            FROM clientes c
+            INNER JOIN atendimentos a ON a.cliente_id = c.id
             WHERE 1=1
         ";
         if ($setor_id) {
@@ -39,28 +97,46 @@ if ($method === 'GET') {
         if (!empty($status)) {
             $sql .= " AND a.status = :status";
         }
-        $sql .= " ORDER BY a.data_abertura DESC";
+        $sql .= " GROUP BY c.id ORDER BY ultima_data DESC";
         $stmt = $pdo->prepare($sql);
         if ($setor_id) $stmt->bindParam(':setor_id', $setor_id, PDO::PARAM_INT);
         if (!empty($status)) $stmt->bindParam(':status', $status, PDO::PARAM_STR);
         $stmt->execute();
+        $clientes = $stmt->fetchAll();
+        echo json_encode($clientes);
+        exit;
     } else {
-        // Atendente comum vê apenas os próprios atendimentos (não precisa de filtro de status, apenas os ativos)
+        // Atendente comum: apenas clientes com quem já atendeu (atendente_atual_id = seu id)
         $sql = "
-            SELECT a.*, c.nome as cliente_nome, c.telefone, s.nome as setor_nome
-            FROM atendimentos a
-            LEFT JOIN clientes c ON a.cliente_id = c.id
-            LEFT JOIN setores s ON a.setor_id = s.id
-            WHERE a.status IN ('aberto', 'transferido')
-              AND a.atendente_atual_id = ?
-            ORDER BY a.data_abertura DESC
+            SELECT 
+                c.id as cliente_id,
+                c.nome as cliente_nome,
+                c.telefone,
+                MAX(a.id) as ultimo_atendimento_id,
+                (SELECT protocolo FROM atendimentos WHERE cliente_id = c.id AND atendente_atual_id = ? ORDER BY id DESC LIMIT 1) as ultimo_protocolo,
+                (SELECT status FROM atendimentos WHERE cliente_id = c.id AND atendente_atual_id = ? ORDER BY id DESC LIMIT 1) as ultimo_status,
+                (SELECT data_abertura FROM atendimentos WHERE cliente_id = c.id AND atendente_atual_id = ? ORDER BY id DESC LIMIT 1) as ultima_data,
+                (SELECT setor_id FROM atendimentos WHERE cliente_id = c.id AND atendente_atual_id = ? ORDER BY id DESC LIMIT 1) as ultimo_setor_id,
+                (SELECT s.nome FROM setores s WHERE s.id = ultimo_setor_id) as setor_nome
+            FROM clientes c
+            INNER JOIN atendimentos a ON a.cliente_id = c.id
+            WHERE a.atendente_atual_id = ?
+            AND a.status IN ('aberto', 'transferido')
+            GROUP BY c.id
+            ORDER BY ultima_data DESC
         ";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$_SESSION['atendente_id']]);
+        $stmt->execute([
+            $_SESSION['atendente_id'],
+            $_SESSION['atendente_id'],
+            $_SESSION['atendente_id'],
+            $_SESSION['atendente_id'],
+            $_SESSION['atendente_id']
+        ]);
+        $clientes = $stmt->fetchAll();
+        echo json_encode($clientes);
+        exit;
     }
-
-    echo json_encode($stmt->fetchAll());
-    exit;
 }
 
 // --------------------------------------------------------------
@@ -81,11 +157,12 @@ if ($method === 'POST' && isset($_GET['action'])) {
 
         $atendimentoId = (int)$data['atendimento_id'];
         $novoAtendenteId = (int)$data['atendente_id'];
+        $novoSetorId = isset($data['setor_id']) ? (int)$data['setor_id'] : null;
 
         try {
-            // Buscar dados do atendimento (incluindo session_id e telefone)
+            // Buscar dados do atendimento (incluindo session_id, telefone e setor atual)
             $stmt = $pdo->prepare("
-            SELECT a.atendente_atual_id, a.session_id, c.telefone, s.nome as setor_nome
+            SELECT a.atendente_atual_id, a.session_id, a.setor_id as setor_atual, c.telefone, s.nome as setor_nome_atual
             FROM atendimentos a
             JOIN clientes c ON a.cliente_id = c.id
             JOIN setores s ON a.setor_id = s.id
@@ -98,6 +175,7 @@ if ($method === 'POST' && isset($_GET['action'])) {
             $atendenteOrigem = $atend['atendente_atual_id'];
             $sessionId = $atend['session_id'];
             $telefoneCliente = $atend['telefone'];
+            $setorAtualId = $atend['setor_atual'];
 
             // Buscar nome do novo atendente
             $stmtAtendente = $pdo->prepare("SELECT nome FROM atendentes WHERE id = ?");
@@ -105,11 +183,27 @@ if ($method === 'POST' && isset($_GET['action'])) {
             $novoAtendente = $stmtAtendente->fetch();
             $nomeNovoAtendente = $novoAtendente ? $novoAtendente['nome'] : 'Atendente';
 
+            // Se novo setor foi informado e é diferente do atual, buscar seu nome
+            $novoSetorNome = null;
+            if ($novoSetorId && $novoSetorId != $setorAtualId) {
+                $stmtSetor = $pdo->prepare("SELECT nome FROM setores WHERE id = ?");
+                $stmtSetor->execute([$novoSetorId]);
+                $novoSetorNome = $stmtSetor->fetchColumn();
+                if (!$novoSetorNome) throw new Exception('Setor de destino não encontrado');
+            }
+
             $pdo->beginTransaction();
 
-            // 1. Atualizar atendimento
-            $stmt = $pdo->prepare("UPDATE atendimentos SET atendente_atual_id = ?, status = 'transferido' WHERE id = ?");
-            $stmt->execute([$novoAtendenteId, $atendimentoId]);
+            // 1. Atualizar atendimento (atendente e, se necessário, setor)
+            $sql = "UPDATE atendimentos SET atendente_atual_id = ?, status = 'transferido'";
+            $params = [$novoAtendenteId, $atendimentoId];
+            if ($novoSetorId && $novoSetorId != $setorAtualId) {
+                $sql .= ", setor_id = ?";
+                array_splice($params, 1, 0, [$novoSetorId]); // insere antes do WHERE
+            }
+            $sql .= " WHERE id = ?";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
 
             // 2. Histórico novo atendente
             if (method_exists('Atendimento', 'adicionarHistorico')) {
@@ -128,7 +222,7 @@ if ($method === 'POST' && isset($_GET['action'])) {
                 $stmt->execute([$atendimentoId]);
             }
 
-            // 4. Inserir mensagem de sistema informando a transferência
+            // 4. Inserir mensagem de sistema informando a transferência (e possível mudança de setor)
             $mensagemTexto = "🔄 Atendimento transferido";
             if ($atendenteOrigem) {
                 $stmtOrigem = $pdo->prepare("SELECT nome FROM atendentes WHERE id = ?");
@@ -140,6 +234,10 @@ if ($method === 'POST' && isset($_GET['action'])) {
             }
             $mensagemTexto .= " para " . $nomeNovoAtendente;
 
+            if ($novoSetorNome && $novoSetorId != $setorAtualId) {
+                $mensagemTexto .= " e setor alterado para {$novoSetorNome}";
+            }
+
             $stmtMsg = $pdo->prepare("
             INSERT INTO mensagens (atendimento_id, session_id, remetente_tipo, direcao, tipo, mensagem, data_envio)
             VALUES (?, ?, 'sistema', 'entrada', 'texto', ?, NOW())
@@ -148,8 +246,13 @@ if ($method === 'POST' && isset($_GET['action'])) {
 
             $pdo->commit();
 
-            // Enviar mensagem ao cliente (opcional, mas desejável)
-            $mensagemCliente = "🔄 Seu atendimento foi transferido para *{$nomeNovoAtendente}*. \nAguarde um momento.";
+            // Enviar mensagem ao cliente (opcional)
+            $mensagemCliente = "🔄 Seu atendimento foi transferido para *{$nomeNovoAtendente}*";
+            if ($novoSetorNome && $novoSetorId != $setorAtualId) {
+                $mensagemCliente .= " e o setor foi alterado para *{$novoSetorNome}*";
+            }
+            $mensagemCliente .= ". \nAguarde um momento.";
+
             $url = BASE_URL_API . 'api/send';
             $postData = ['sessionId' => $sessionId, 'number' => $telefoneCliente, 'message' => $mensagemCliente];
             $ch = curl_init($url);
@@ -169,7 +272,10 @@ if ($method === 'POST' && isset($_GET['action'])) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
         exit;
-    } elseif ($_GET['action'] === 'finalizar') {
+    }
+
+    // ---------- FINALIZAR ----------
+    elseif ($_GET['action'] === 'finalizar') {
         $input = file_get_contents('php://input');
         error_log("Finalizar - dados: " . $input);
         $data = json_decode($input, true);
@@ -200,9 +306,7 @@ if ($method === 'POST' && isset($_GET['action'])) {
 
             $pdo->commit();
 
-            // ----------------------------------------------------------
-            // Enviar mensagem de encerramento ao cliente 
-            // ----------------------------------------------------------
+            // Enviar mensagem de encerramento ao cliente
             $stmtCliente = $pdo->prepare("
                 SELECT c.telefone, a.session_id 
                 FROM atendimentos a 
@@ -216,7 +320,6 @@ if ($method === 'POST' && isset($_GET['action'])) {
                 $sessionId = $clienteData['session_id'];
                 $mensagemEncerramento = "✅ *Seu atendimento foi finalizado.* \n\nAgradecemos o contato! \nCaso precise, inicie um novo atendimento enviando uma mensagem.";
 
-                // Usa a mesma configuração que funciona no WebhookHandler
                 $url = BASE_URL_API . 'api/send';
                 $postData = [
                     'sessionId' => $sessionId,
@@ -233,7 +336,7 @@ if ($method === 'POST' && isset($_GET['action'])) {
                 ]);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // para testes, depois remova
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
 
                 $response = curl_exec($ch);
@@ -241,16 +344,9 @@ if ($method === 'POST' && isset($_GET['action'])) {
                 $curlError = curl_error($ch);
                 curl_close($ch);
 
-                // Log detalhado para depuração
                 error_log("Encerramento - Telefone: $telefone, HTTP: $httpCode, Resposta: " . substr($response, 0, 200));
-                if ($curlError) {
-                    error_log("Erro cURL no encerramento: $curlError");
-                }
-
-                // Se ainda assim falhar, registra mas não impede o fluxo
-                if ($httpCode != 200) {
-                    error_log("Falha no envio da mensagem de encerramento para $telefone. Código: $httpCode");
-                }
+                if ($curlError) error_log("Erro cURL no encerramento: $curlError");
+                if ($httpCode != 200) error_log("Falha no envio da mensagem de encerramento para $telefone. Código: $httpCode");
             }
 
             echo json_encode(['status' => 'ok']);

@@ -135,3 +135,47 @@
 2026-05-21 15:40:04 - Resposta: {"success":true,"queued":true}
 2026-05-21 15:40:04 - ✅ Mensagem enviada com sucesso para 558197117719
 2026-05-21 15:40:04 - Menu enviado.
+2026-05-21 19:08:28 - Recebido: {"user_id":2,"session_id":"af6a8cb6-9753-4342-9c5b-5dee3ec318c2","event_type":"message.received","payload":{"body":"Opa","from":"558192674335","contact_name":"Gustavo Santos","has_media":false,"media_name":null,"media_path":null,"timestamp":1779390506,"quoted_message_id":null,"quoted_sender":null,"quoted_preview_text":null,"is_history":false}}
+2026-05-21 19:08:28 - Mensagem de 558192674335: Opa
+2026-05-21 19:08:28 - Cliente ID: 1
+2026-05-21 19:08:28 - Atendimento existente: nenhum
+2026-05-21 19:08:28 - Verificando menu: Opa
+2026-05-21 19:08:28 - Nenhum setor reconhecido. Enviando menu...
+2026-05-21 19:08:28 - >>> INICIANDO ENVIO para 558192674335
+2026-05-21 19:08:28 - URL: https://zapcloud.techsystembrasil.com.br/api/send
+2026-05-21 19:08:28 - Dados: {"sessionId":"af6a8cb6-9753-4342-9c5b-5dee3ec318c2","number":"558192674335","message":"\ud83d\udccb *Escolha um setor:*\n\n\u27a1\ufe0f 1 - Comercial\n\u27a1\ufe0f 2 - Financeiro\n\u27a1\ufe0f 3 - Suporte T\u00e9cnico\n\u27a1\ufe0f 4 - Treinamento\n\u27a1\ufe0f 5 - Ouvidoria\n\nResponda com o *n\u00famero* do setor."}
+2026-05-21 19:08:28 - HTTP Code: 200
+2026-05-21 19:08:28 - Resposta: {"success":true,"queued":true}
+2026-05-21 19:08:28 - ✅ Mensagem enviada com sucesso para 558192674335
+2026-05-21 19:08:28 - Menu enviado.
+2026-05-21 19:08:37 - Recebido: {"user_id":2,"session_id":"af6a8cb6-9753-4342-9c5b-5dee3ec318c2","event_type":"message.received","payload":{"body":"3","from":"558192674335","contact_name":"Gustavo Santos","has_media":false,"media_name":null,"media_path":null,"timestamp":1779390516,"quoted_message_id":null,"quoted_sender":null,"quoted_preview_text":null,"is_history":false}}
+2026-05-21 19:08:37 - Mensagem de 558192674335: 3
+2026-05-21 19:08:37 - Cliente ID: 1
+2026-05-21 19:08:37 - Atendimento existente: nenhum
+2026-05-21 19:08:37 - Verificando menu: 3
+2026-05-21 19:08:37 - Setor reconhecido: Suporte Técnico (ID 3)
+2026-05-21 19:08:37 - Atendimento criado: 15 - AT202605219168 - Setor: 3 - Atendente: 6
+2026-05-21 19:08:37 - >>> INICIANDO ENVIO para 558192674335
+2026-05-21 19:08:37 - URL: https://zapcloud.techsystembrasil.com.br/api/send
+2026-05-21 19:08:37 - Dados: {"sessionId":"af6a8cb6-9753-4342-9c5b-5dee3ec318c2","number":"558192674335","message":"\u2705 *Ol\u00e1 seja bem-vindo!* \n\n*Protocolo: AT202605219168* \nAtendimento iniciado com JO\u00c3O SOARES. \nEnvie sua mensagem."}
+2026-05-21 19:08:37 - HTTP Code: 200
+2026-05-21 19:08:37 - Resposta: {"success":true,"queued":true}
+2026-05-21 19:08:37 - ✅ Mensagem enviada com sucesso para 558192674335
+2026-05-21 20:10:09 - Recebido: {"user_id":2,"session_id":"af6a8cb6-9753-4342-9c5b-5dee3ec318c2","event_type":"message.received","payload":{"body":"Que bom","from":"558197117719","contact_name":"Mariana","has_media":false,"media_name":null,"media_path":null,"timestamp":1779394207,"quoted_message_id":"true_247626977022110@lid_3EB00B290868C864C4EAA8","quoted_sender":"Voc\u00ea","quoted_preview_text":"tudo bem gra\u00e7as a Deus","is_history":false}}
+2026-05-21 20:10:09 - Mensagem de 558197117719: Que bom
+2026-05-21 20:10:09 - Cliente ID: 4
+2026-05-21 20:10:09 - Atendimento existente: nenhum
+2026-05-21 20:10:09 - Verificando menu: Que bom
+2026-05-21 20:10:09 - Nenhum setor reconhecido. Enviando menu...
+2026-05-21 20:10:09 - >>> INICIANDO ENVIO para 558197117719
+2026-05-21 20:10:09 - URL: https://zapcloud.techsystembrasil.com.br/api/send
+2026-05-21 20:10:09 - Dados: {"sessionId":"af6a8cb6-9753-4342-9c5b-5dee3ec318c2","number":"558197117719","message":"\ud83d\udccb *Escolha um setor:*\n\n\u27a1\ufe0f 1 - Comercial\n\u27a1\ufe0f 2 - Financeiro\n\u27a1\ufe0f 3 - Suporte T\u00e9cnico\n\u27a1\ufe0f 4 - Treinamento\n\u27a1\ufe0f 5 - Ouvidoria\n\nResponda com o *n\u00famero* do setor."}
+2026-05-21 20:10:09 - HTTP Code: 200
+2026-05-21 20:10:09 - Resposta: {"success":true,"queued":true}
+2026-05-21 20:10:09 - ✅ Mensagem enviada com sucesso para 558197117719
+2026-05-21 20:10:09 - Menu enviado.
+2026-05-21 20:15:57 - Recebido: {"user_id":2,"session_id":"af6a8cb6-9753-4342-9c5b-5dee3ec318c2","event_type":"message.received","payload":{"body":"Blz","from":"558192674335","contact_name":"Gustavo Santos","has_media":false,"media_name":null,"media_path":null,"timestamp":1779394557,"quoted_message_id":null,"quoted_sender":null,"quoted_preview_text":null,"is_history":false}}
+2026-05-21 20:15:57 - Mensagem de 558192674335: Blz
+2026-05-21 20:15:57 - Cliente ID: 1
+2026-05-21 20:15:57 - Atendimento existente: 15
+2026-05-21 20:15:57 - Mensagem 74 salva no atendimento 15

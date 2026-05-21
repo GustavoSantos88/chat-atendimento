@@ -54,17 +54,19 @@ class WebhookHandler
         self::log('Atendimento existente: ' . ($atendimento ? $atendimento['id'] : 'nenhum'));
 
         if ($atendimento) {
+            // Atendimento já aberto: salva a mensagem e notifica
             $msgId = Mensagem::salvar($atendimento['id'], $sessionId, 'cliente', 'entrada', 'texto', $mensagem, null, date('Y-m-d H:i:s', $timestamp));
             self::log("Mensagem $msgId salva no atendimento {$atendimento['id']}");
             self::emitirEvento('novaMensagem', ['atendimento_id' => $atendimento['id'], 'mensagem' => $mensagem]);
         } else {
+            // Novo atendimento: verifica se é resposta ao menu
             $setorId = self::verificarMenu($mensagem);
             if ($setorId) {
                 // Busca próximo atendente disponível para o setor escolhido
                 $proximoAtendente = RoundRobin::proximoAtendente($setorId);
                 $atendenteId = $proximoAtendente ? $proximoAtendente['id'] : null;
 
-                // Opcional: Verificar se o atendente retornado realmente pertence ao setor (redundante, mas seguro)
+                // Verifica se o atendente realmente pertence ao setor (segurança)
                 if ($atendenteId) {
                     $check = $pdo->prepare("SELECT 1 FROM atendente_setor WHERE atendente_id = ? AND setor_id = ?");
                     $check->execute([$atendenteId, $setorId]);
@@ -75,25 +77,32 @@ class WebhookHandler
                     }
                 }
 
+                // Busca nome do setor para a mensagem de sistema
+                $stmtSetor = $pdo->prepare("SELECT nome FROM setores WHERE id = ?");
+                $stmtSetor->execute([$setorId]);
+                $setorNome = $stmtSetor->fetchColumn() ?: 'desconhecido';
+
+                // Cria o atendimento
                 $novo = Atendimento::criar($cliente['id'], $setorId, $sessionId, $atendenteId);
                 self::log("Atendimento criado: {$novo['id']} - {$novo['protocolo']} - Setor: $setorId - Atendente: " . ($atendenteId ?? 'nenhum'));
 
-                // Salva a mensagem que escolheu o setor
+                // Salva a mensagem que escolheu o setor (resposta do menu)
                 Mensagem::salvar($novo['id'], $sessionId, 'cliente', 'entrada', 'texto', $mensagem, null, date('Y-m-d H:i:s', $timestamp));
 
-                // $texto = $atendenteId ? "✅ Atendimento iniciado com {$proximoAtendente['nome']}. Envie sua mensagem." : "⏳ Você está na fila. Em breve será atendido.";
-                $protocolo = $novo['protocolo'];
-                $texto = $atendenteId
-                    ? "✅ *Olá seja bem vindo!* \n\n*Protocolo: {$protocolo}* \nAtendimento iniciado com {$proximoAtendente['nome']}. \nEnvie sua mensagem."
-                    : "⏳ *Olá seja bem vindo!* \n\n*Protocolo: {$protocolo}* criado. \nVocê está na fila. \nEm breve um atendente estará disponível.";
+                // Mensagem de sistema informando abertura do atendimento
+                $mensagemSistema = "🟢 *Atendimento #{$novo['protocolo']} iniciado* para o setor {$setorNome}" . ($atendenteId ? " (atendente: {$proximoAtendente['nome']})" : "");
+                Mensagem::salvar($novo['id'], $sessionId, 'sistema', 'entrada', 'texto', $mensagemSistema, null, date('Y-m-d H:i:s'));
 
-                self::enviarWhatsApp($sessionId, $telefone, $texto);
+                // Mensagem de boas‑vindas enviada ao cliente
+                $textoBoasVindas = $atendenteId
+                    ? "✅ *Olá seja bem-vindo!* \n\n*Protocolo: {$novo['protocolo']}* \nAtendimento iniciado com {$proximoAtendente['nome']}. \nEnvie sua mensagem."
+                    : "⏳ *Olá seja bem-vindo!* \n\n*Protocolo: {$novo['protocolo']}* criado. \nVocê está na fila. \nEm breve um atendente estará disponível.";
 
-                $texto = $atendenteId
-                    ? "✅ Olá seja bem vindo! \n\nProtocolo: {$protocolo} \nAtendimento iniciado com {$proximoAtendente['nome']}. \n\nEnvie sua mensagem."
-                    : "⏳ Olá seja bem vindo! \n\nProtocolo: {$protocolo} criado. \nVocê está na fila. \nEm breve um atendente estará disponível.";
+                self::enviarWhatsApp($sessionId, $telefone, $textoBoasVindas);
 
-                Mensagem::salvar($novo['id'], $sessionId, 'sistema', 'saida', 'texto', $texto, null, date('Y-m-d H:i:s'));
+                // Salva a mensagem de boas‑vindas no histórico (como sistema)
+                Mensagem::salvar($novo['id'], $sessionId, 'sistema', 'saida', 'texto', $textoBoasVindas, null, date('Y-m-d H:i:s'));
+
                 self::emitirEvento('novoAtendimento', ['atendimento' => $novo, 'setor_id' => $setorId]);
             } else {
                 self::log('Nenhum setor reconhecido. Enviando menu...');

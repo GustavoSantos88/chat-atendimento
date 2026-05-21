@@ -1,19 +1,17 @@
-// dashboard.js - Versão ajustada (filtros somente na aba Atendimento)
-
+// dashboard.js - Versão com agrupamento por cliente, quebras de linha e divisores de atendimento
 let socket = null;
-let atendimentosList = [];
+let clientesList = [];
+let currentClienteId = null;
 let currentAtendimentoId = null;
 let currentSessionId = null;
 let currentProtocolo = null;
 let currentTelefone = null;
 let currentSetorId = null;
-
-// ========== FUNÇÕES GLOBAIS (não dependem dos filtros) ==========
-// (Nenhuma função global que acesse filtros permanece aqui)
+let currentStatus = null;
+const atendimentoId = window.atendenteId;
 
 // ========== FUNÇÃO PRINCIPAL DE INICIALIZAÇÃO DO CHAT ==========
 window.initChat = function () {
-    // Evita múltiplas inicializações
     if (socket && socket.connected) {
         socket.disconnect();
     }
@@ -25,7 +23,6 @@ window.initChat = function () {
     const menuToggle = document.getElementById('menuToggle');
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebarOverlay');
-
     if (menuToggle && sidebar) {
         const newMenuToggle = menuToggle.cloneNode(true);
         menuToggle.parentNode.replaceChild(newMenuToggle, menuToggle);
@@ -75,7 +72,7 @@ window.initChat = function () {
         });
     }
 
-    // ========== CONFIGURAÇÃO DOS FILTROS (AGORA DENTRO DO CHAT) ==========
+    // ========== CONFIGURAÇÃO DOS FILTROS ==========
     function carregarSetores() {
         const select = document.getElementById('filtroSetor');
         if (!select) return;
@@ -108,7 +105,6 @@ window.initChat = function () {
         return params.length ? '?' + params.join('&') : '';
     }
 
-    // Inicializa os filtros (carrega setores e adiciona listeners)
     const filtroSetor = document.getElementById('filtroSetor');
     const filtroStatus = document.getElementById('filtroStatus');
     if (filtroSetor) {
@@ -133,61 +129,60 @@ window.initChat = function () {
         fetch(url)
             .then(res => res.json())
             .then(data => {
-                atendimentosList = data;
+                clientesList = data;
                 renderConversations(data);
-                if (currentAtendimentoId && !data.find(a => a.id == currentAtendimentoId)) {
+                if (currentClienteId && !data.find(c => c.cliente_id == currentClienteId)) {
                     closeChat();
                 }
             })
-            .catch(err => toast('Erro ao carregar atendimentos', 'error'));
+            .catch(err => toast('Erro ao carregar conversas', 'error'));
     }
 
     function renderConversations(conversations) {
         const container = document.getElementById('listaAtendimentos');
         if (!container) return;
         if (!conversations.length) {
-            container.innerHTML = '<div class="text-muted text-center p-4">Nenhum atendimento ativo</div>';
+            container.innerHTML = '<div class="text-muted text-center p-4">Nenhum cliente com atendimento</div>';
             return;
         }
         let html = '';
-        conversations.forEach(conv => {
-            const isActive = (currentAtendimentoId == conv.id);
-            const avatarText = conv.cliente_nome ? conv.cliente_nome.charAt(0).toUpperCase() : '?';
+        conversations.forEach(cli => {
+            const isActive = (currentClienteId == cli.cliente_id);
+            const avatarText = cli.cliente_nome ? cli.cliente_nome.charAt(0).toUpperCase() : '?';
             html += `
                 <div class="conversation-item ${isActive ? 'active' : ''}" 
-                     data-id="${conv.id}" 
-                     data-session="${conv.session_id}" 
-                     data-telefone="${conv.telefone}" 
-                     data-nome="${escapeHtml(conv.cliente_nome)}" 
-                     data-setor="${conv.setor_nome}"
-                     data-setor-id="${conv.setor_id}"
-                     data-protocolo="${conv.protocolo}"
-                     title="Selecione o atendimento ${conv.protocolo}">                     
+                     data-cliente-id="${cli.cliente_id}"
+                     data-nome="${escapeHtml(cli.cliente_nome)}"
+                     data-telefone="${escapeHtml(cli.telefone)}"
+                     data-ultimo-atendimento-id="${cli.ultimo_atendimento_id}"
+                     data-ultimo-status="${cli.ultimo_status}"
+                     data-setor-nome="${escapeHtml(cli.setor_nome)}"
+                     data-ultimo-protocolo="${escapeHtml(cli.ultimo_protocolo)}"
+                     data-ultima-data="${cli.ultima_data}">
                     <div class="avatar">${avatarText}</div>
-                    <div class="conversation-info">            
-                        <div class="conversation-name">${escapeHtml(conv.cliente_nome)}</div>                          
-                        <div class="conversation-lastmsg">Protocolo: ${escapeHtml(conv.protocolo)}</div>
+                    <div class="conversation-info">
+                        <div class="conversation-name">${escapeHtml(cli.cliente_nome)}</div>
+                        <div class="conversation-lastmsg">Protocolo: ${escapeHtml(cli.ultimo_protocolo)}</div>
                         <div class="conversation-lastmsg">
-                            ${escapeHtml(conv.setor_nome)} 
-                            <span class="badge bg-secondary">${escapeHtml(conv.status)}</span>
+                            ${escapeHtml(cli.setor_nome)} 
+                            <span class="badge bg-secondary">${escapeHtml(cli.ultimo_status)}</span>
                         </div>
                     </div>
-                    <div class="conversation-time">${formatTime(conv.data_abertura)}</div>
+                    <div class="conversation-time">${formatTime(cli.ultima_data)}</div>
                 </div>
             `;
         });
         container.innerHTML = html;
         document.querySelectorAll('.conversation-item').forEach(el => {
             el.addEventListener('click', () => {
-                const id = el.dataset.id;
-                const session = el.dataset.session;
-                const protocolo = el.dataset.protocolo;
-                const telefone = el.dataset.telefone;
+                const clienteId = el.dataset.clienteId;
                 const nome = el.dataset.nome;
-                const setor = el.dataset.setor;
-                const setorId = el.dataset.setorId;
-                const status = el.querySelector('.badge').textContent;
-                openChat(id, session, protocolo, telefone, nome, setor, setorId, status);
+                const telefone = el.dataset.telefone;
+                const ultimoAtendimentoId = el.dataset.ultimoAtendimentoId;
+                const ultimoStatus = el.dataset.ultimoStatus;
+                const setorNome = el.dataset.setorNome;
+                const ultimoProtocolo = el.dataset.ultimoProtocolo;
+                openChat(clienteId, nome, telefone, ultimoAtendimentoId, ultimoStatus, setorNome, ultimoProtocolo);
             });
         });
     }
@@ -207,47 +202,149 @@ window.initChat = function () {
         });
     }
 
-    function openChat(id, sessionId, protocolo, telefone, nome, setor, setorId, status) {
-        currentAtendimentoId = id;
-        currentSessionId = sessionId;
-        currentProtocolo = protocolo;
+    function formatarMensagem(texto) {
+        if (!texto) return '';
+        // Escapa HTML primeiro (evita XSS)
+        let msg = escapeHtml(texto);
+        // Substitui quebras de linha por <br>
+        msg = msg.replace(/\n/g, '<br>');
+        // Substitui *texto* por <strong>texto</strong> (regex não greedy)
+        msg = msg.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+        return msg;
+    }
+
+    // ========== RENDERIZAÇÃO DE MENSAGENS COM DIVISORES ==========
+    function renderizarMensagens(messages) {
+        const container = document.getElementById('messagesContainer');
+        if (!messages.length) {
+            container.innerHTML = '<div class="text-muted text-center">Nenhuma mensagem ainda</div>';
+            return;
+        }
+        let html = '';
+        let lastAtendimentoId = null;
+        messages.forEach(msg => {
+            const atendimentoId = msg.atendimento_id;
+            const atendimentoStatus = msg.atendimento_status;
+            if (atendimentoId !== lastAtendimentoId) {
+                const protocolo = msg.protocolo;
+                const dataAbertura = new Date(msg.atendimento_data_abertura).toLocaleString();
+                const statusText = atendimentoStatus === 'finalizado' ? 'Finalizado' : (atendimentoStatus === 'aberto' ? 'Em andamento' : 'Transferido');
+                const statusClass = atendimentoStatus === 'finalizado' ? 'divider-end' : (atendimentoStatus === 'aberto' ? 'divider-active' : 'divider-transfer');
+                html += `
+                    <div class="atendimento-divider ${statusClass}">
+                        <hr>
+                        <div class="divider-content">
+                            <strong>📋 Atendimento #${escapeHtml(protocolo)}</strong><br>
+                            Início: ${dataAbertura}<br>
+                            Status: ${statusText}
+                        </div>
+                        <hr>
+                    </div>
+                `;
+                lastAtendimentoId = atendimentoId;
+            }
+            const isSent = msg.remetente_tipo === 'atendente';
+            let nomeHtml = '';
+            if (isSent && msg.atendente_nome) {
+                nomeHtml = `<div class="message-sender">${escapeHtml(msg.atendente_nome)}</div>`;
+            }
+
+            let mensagemTexto = formatarMensagem(msg.mensagem);
+
+            html += `
+                <div class="message ${isSent ? 'sent' : 'received'}">
+                    <div class="message-bubble">
+                        ${nomeHtml}
+                        ${mensagemTexto}
+                    </div>
+                </div>
+                <div class="message-time ${isSent ? 'sent' : 'received'}">${formatTime(msg.data_envio)}</div>
+            `;
+        });
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // Busca atendimento ativo (aberto ou transferido) para o cliente
+    function buscarAtendimentoAtivo(clienteId) {
+        return fetch(`${window.baseUrl}api/atendimentos.php?action=get_ativo_por_cliente&cliente_id=${clienteId}`)
+            .then(res => res.json())
+            .then(data => data.atendimento_id || null)
+            .catch(() => null);
+    }
+
+    function carregarMensagensPorCliente(clienteId) {
+        return fetch(`${window.baseUrl}api/mensagens.php?cliente_id=${clienteId}`)
+            .then(res => res.json())
+            .then(messages => messages)
+            .catch(() => []);
+    }
+
+    function openChat(clienteId, nome, telefone, ultimoAtendimentoId, ultimoStatus, setorNome, ultimoProtocolo) {
+        currentClienteId = clienteId;
         currentTelefone = telefone;
-        currentSetorId = setorId;
+        currentProtocolo = ultimoProtocolo;
+        currentSetorId = null;
+        currentStatus = ultimoStatus;
 
         document.getElementById('chatArea').style.display = 'flex';
         document.getElementById('emptyChat').style.display = 'none';
 
         const avatarLetter = nome ? nome.charAt(0).toUpperCase() : '?';
-        const isAdmin = (window.atendenteId == 1);
-        const blockedStatus = ['finalizado'];
-        // Atendente comum vê botões apenas se status não estiver bloqueado
-        const showActions = !blockedStatus.includes(status?.toLowerCase());
-
-        const actionButtons = showActions ? `
-            <div>
-                <button class="btn-sm-custom" onclick="window.transferir()" title="Transferir atendimento">Transferir</button>
-                <button class="btn-sm-custom" style="background:#dc3545;" onclick="window.finalizar()" title="Finalizar atendimento">Finalizar</button>
-            </div>
-        ` : '';
-
         document.getElementById('chatHeader').innerHTML = `
             <div class="avatar">${avatarLetter}</div>
             <div class="chat-header-info">
                 <div class="chat-header-name">${escapeHtml(nome)}</div>
                 <div class="conversation-lastmsg">${telefone.replace(/^55/, '').replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')}</div>
-                <div class="conversation-lastmsg">Protocolo: ${escapeHtml(protocolo)}</div>
-                <div class="chat-header-status">${escapeHtml(setor)}</div>
+                <div class="conversation-lastmsg">Protocolo último atendimento: ${escapeHtml(ultimoProtocolo)}</div>
+                <div class="chat-header-status">${escapeHtml(setorNome)}</div>
             </div>
-            ${actionButtons}
+            <div id="chatActions" class="d-flex gap-2">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+            </div>
         `;
-        carregarMensagens(id);
+
+        // Carrega todo o histórico de mensagens do cliente
+        carregarMensagensPorCliente(clienteId).then(messages => {
+            renderizarMensagens(messages);
+        });
+
+        // Busca atendimento ativo para este cliente
+        buscarAtendimentoAtivo(clienteId).then(atendimentoId => {
+            if (atendimentoId) {
+                currentAtendimentoId = atendimentoId;
+                fetch(`${window.baseUrl}api/atendimentos.php?action=get_dados_atendimento&id=${atendimentoId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        currentSessionId = data.session_id;
+                        currentSetorId = data.setor_id;
+                        const isAdmin = (window.atendenteId == 1);
+                        const blockedStatus = ['finalizado'];
+                        const showActions = !blockedStatus.includes(currentStatus?.toLowerCase());
+                        const actionButtons = showActions ? `
+                            <button class="btn-sm-custom" onclick="window.transferir()" title="Transferir atendimento">Transferir</button>
+                            <button class="btn-sm-custom" style="background:#dc3545;" onclick="window.finalizar()" title="Finalizar atendimento">Finalizar</button>
+                        ` : '';
+                        document.getElementById('chatActions').innerHTML = actionButtons || '<span class="text-muted">Sem atendimento ativo</span>';
+                    })
+                    .catch(() => {
+                        document.getElementById('chatActions').innerHTML = '<span class="text-danger">Erro ao obter dados do atendimento</span>';
+                    });
+            } else {
+                currentAtendimentoId = null;
+                document.getElementById('chatActions').innerHTML = '<span class="text-muted">Este cliente não possui atendimento ativo</span>';
+                toast('Este cliente não possui atendimento ativo. Para enviar mensagem, o cliente deve iniciar um novo atendimento.', 'info');
+            }
+        });
+
         document.querySelectorAll('.conversation-item').forEach(el => {
             el.classList.remove('active');
-            if (el.dataset.id == id) el.classList.add('active');
+            if (el.dataset.clienteId == clienteId) el.classList.add('active');
         });
     }
 
     function closeChat() {
+        currentClienteId = null;
         currentAtendimentoId = null;
         currentSetorId = null;
         document.getElementById('chatArea').style.display = 'none';
@@ -255,42 +352,10 @@ window.initChat = function () {
         document.getElementById('messagesContainer').innerHTML = '';
     }
 
-    function carregarMensagens(atendimentoId) {
-        fetch(`${window.baseUrl}api/mensagens.php?atendimento_id=${atendimentoId}`)
-            .then(res => res.json())
-            .then(messages => {
-                const container = document.getElementById('messagesContainer');
-                if (!messages.length) {
-                    container.innerHTML = '<div class="text-muted text-center">Nenhuma mensagem ainda</div>';
-                    return;
-                }
-                let html = '';
-                messages.forEach(msg => {
-                    const isSent = msg.remetente_tipo === 'atendente';
-                    let nomeHtml = '';
-                    if (isSent && msg.atendente_nome) {
-                        nomeHtml = `<div class="message-sender">${escapeHtml(msg.atendente_nome)}</div>`;
-                    }
-                    html += `
-                        <div class="message ${isSent ? 'sent' : 'received'}">
-                            <div class="message-bubble">
-                                ${nomeHtml}
-                                ${escapeHtml(msg.mensagem)}
-                            </div>
-                        </div>
-                        <div class="message-time ${isSent ? 'sent' : 'received'}">${formatTime(msg.data_envio)}</div>
-                    `;
-                });
-                container.innerHTML = html;
-                container.scrollTop = container.scrollHeight;
-            })
-            .catch(() => toast('Erro ao carregar mensagens', 'error'));
-    }
-
     window.enviarMsg = function () {
         const msg = document.getElementById('msgInput').value;
         if (!msg) return toast('Digite uma mensagem', 'info');
-        if (!currentAtendimentoId) return toast('Nenhum atendimento selecionado', 'info');
+        if (!currentAtendimentoId) return toast('Não há atendimento ativo para este cliente', 'info');
         fetchWithToast(
             window.baseUrl + 'api/mensagens.php',
             {
@@ -307,46 +372,194 @@ window.initChat = function () {
             'Erro ao enviar'
         ).then(() => {
             document.getElementById('msgInput').value = '';
-            carregarMensagens(currentAtendimentoId);
+            if (currentClienteId) {
+                carregarMensagensPorCliente(currentClienteId).then(messages => {
+                    renderizarMensagens(messages);
+                });
+            }
         });
     };
 
     window.transferir = function () {
         if (!currentAtendimentoId) {
-            toast('Nenhum atendimento selecionado', 'error');
-            return;
-        }
-        if (!currentSetorId) {
-            toast('Setor não identificado para este atendimento', 'error');
+            toast('Nenhum atendimento ativo', 'error');
             return;
         }
 
-        fetch(`${window.baseUrl}api/atendentes.php?action=listar_por_setor&setor_id=${currentSetorId}`)
-            .then(res => res.json())
-            .then(lista => {
-                if (!lista.length) {
-                    toast('Nenhum atendente disponível neste setor', 'info');
-                    return;
-                }
+        const isAdmin = (window.atendenteId == 1);
+        const currentSetor = currentSetorId; // setor atual do atendimento
 
-                const modalId = 'transferModal';
-                const existingModal = document.getElementById(modalId);
-                if (existingModal) existingModal.remove();
-
-                let options = '<option value="">Selecione um atendente</option>';
-                lista.forEach(atendente => {
-                    options += `<option value="${atendente.id}">${escapeHtml(atendente.nome)} (ID ${atendente.id})</option>`;
+        // Função para buscar atendentes de um setor
+        function carregarAtendentesPorSetor(setorId, callback) {
+            fetch(`${window.baseUrl}api/atendentes.php?action=listar_por_setor&setor_id=${setorId}`)
+                .then(res => res.json())
+                .then(lista => callback(lista))
+                .catch(err => {
+                    console.error(err);
+                    toast('Erro ao carregar atendentes', 'error');
+                    callback([]);
                 });
+        }
 
-                const modalHtml = `
-                    <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="transferModalLabel" aria-hidden="true">
+        // Para admin: primeiro mostra seletor de setores
+        if (isAdmin) {
+            // Buscar lista de setores ativos
+            fetch(`${window.baseUrl}api/setores.php`)
+                .then(res => res.json())
+                .then(setores => {
+                    if (!setores.length) {
+                        toast('Nenhum setor disponível', 'info');
+                        return;
+                    }
+
+                    // Remove modal existente
+                    const modalId = 'transferModal';
+                    const existingModal = document.getElementById(modalId);
+                    if (existingModal) existingModal.remove();
+
+                    let modalHtml = `
+                    <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
-                                    <h5 class="modal-title" id="transferModalLabel">Transferir atendimento</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    <h5 class="modal-title">Transferir atendimento</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                 </div>
-                                <div class="modal-body" title="Selecione um atendente">
+                                <div class="modal-body">
+                                    <div id="transferStep1">
+                                        <label class="form-label">Selecione o setor de destino:</label>
+                                        <select id="setorDestinoSelect" class="form-select">
+                                            <option value="">-- Escolha um setor --</option>
+                `;
+                    setores.forEach(s => {
+                        modalHtml += `<option value="${s.id}" ${s.id == currentSetor ? 'selected' : ''}>${escapeHtml(s.nome)}</option>`;
+                    });
+                    modalHtml += `
+                                        </select>
+                                    </div>
+                                    <div id="transferStep2" style="display:none; margin-top:15px;">
+                                        <label class="form-label">Selecione o atendente de destino:</label>
+                                        <select id="atendenteDestinoSelect" class="form-select">
+                                            <option value="">-- Carregando --</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="button" class="btn btn-primary" id="confirmTransferBtn" disabled>Confirmar Transferência</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+                    const modalElement = document.getElementById(modalId);
+                    const modal = new bootstrap.Modal(modalElement, { backdrop: 'static', keyboard: false });
+                    modal.show();
+
+                    const setorSelect = document.getElementById('setorDestinoSelect');
+                    const atendenteSelect = document.getElementById('atendenteDestinoSelect');
+                    const step2Div = document.getElementById('transferStep2');
+                    const confirmBtn = document.getElementById('confirmTransferBtn');
+
+                    // Ao mudar o setor, carregar atendentes daquele setor
+                    setorSelect.addEventListener('change', function () {
+                        const setorId = this.value;
+                        if (!setorId) {
+                            step2Div.style.display = 'none';
+                            confirmBtn.disabled = true;
+                            atendenteSelect.innerHTML = '<option value="">-- Selecione um setor primeiro --</option>';
+                            return;
+                        }
+                        // Mostra carregando
+                        step2Div.style.display = 'block';
+                        atendenteSelect.innerHTML = '<option value="">Carregando atendentes...</option>';
+                        confirmBtn.disabled = true;
+
+                        carregarAtendentesPorSetor(setorId, (lista) => {
+                            if (lista.length === 0) {
+                                atendenteSelect.innerHTML = '<option value="">Nenhum atendente disponível neste setor</option>';
+                                confirmBtn.disabled = true;
+                            } else {
+                                let options = '<option value="">Selecione um atendente</option>';
+                                lista.forEach(att => {
+                                    options += `<option value="${att.id}">${escapeHtml(att.nome)} (ID ${att.id})</option>`;
+                                });
+                                atendenteSelect.innerHTML = options;
+                                confirmBtn.disabled = false; // habilita após selecionar atendente? Melhor só habilitar quando atendente for escolhido
+                            }
+                        });
+                    });
+
+                    // Somente habilita o botão confirmar quando um atendente for selecionado
+                    atendenteSelect.addEventListener('change', function () {
+                        confirmBtn.disabled = !this.value;
+                    });
+
+                    // Confirmar transferência
+                    confirmBtn.addEventListener('click', () => {
+                        const setorDestino = setorSelect.value;
+                        const novoAtendenteId = atendenteSelect.value;
+                        if (!novoAtendenteId) {
+                            toast('Selecione um atendente', 'info');
+                            return;
+                        }
+                        modal.hide();
+
+                        // Envia requisição de transferência, incluindo o setor de destino (se diferente do atual)
+                        const body = {
+                            atendimento_id: currentAtendimentoId,
+                            atendente_id: parseInt(novoAtendenteId)
+                        };
+                        if (setorDestino && setorDestino != currentSetor) {
+                            body.setor_id = parseInt(setorDestino);
+                        }
+
+                        fetchWithToast(
+                            window.baseUrl + 'api/atendimentos.php?action=transferir',
+                            {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(body)
+                            },
+                            'Transferência realizada',
+                            'Falha na transferência'
+                        ).then(() => location.reload());
+                    });
+
+                    modalElement.addEventListener('hidden.bs.modal', function () { this.remove(); });
+                })
+                .catch(err => toast('Erro ao carregar setores', 'error'));
+        } else {
+            // Atendente comum: lista apenas atendentes do mesmo setor (comportamento atual)
+            if (!currentSetorId) {
+                toast('Setor não identificado', 'error');
+                return;
+            }
+            fetch(`${window.baseUrl}api/atendentes.php?action=listar_por_setor&setor_id=${currentSetorId}`)
+                .then(res => res.json())
+                .then(lista => {
+                    if (!lista.length) {
+                        toast('Nenhum atendente disponível neste setor', 'info');
+                        return;
+                    }
+                    const modalId = 'transferModal';
+                    const existingModal = document.getElementById(modalId);
+                    if (existingModal) existingModal.remove();
+                    let options = '<option value="">Selecione um atendente</option>';
+                    lista.forEach(atendente => {
+                        options += `<option value="${atendente.id}">${escapeHtml(atendente.nome)} (ID ${atendente.id})</option>`;
+                    });
+                    const modalHtml = `
+                    <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Transferir atendimento</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
                                     <p>Selecione o atendente para transferir:</p>
                                     <select id="transferSelect" class="form-select">${options}</select>
                                 </div>
@@ -358,48 +571,40 @@ window.initChat = function () {
                         </div>
                     </div>
                 `;
-                document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-                const modalElement = document.getElementById(modalId);
-                const modal = new bootstrap.Modal(modalElement, {
-                    backdrop: 'static',
-                    keyboard: false
-                });
-                modal.show();
-
-                document.getElementById('confirmTransferBtn').addEventListener('click', () => {
-                    const select = document.getElementById('transferSelect');
-                    const novoId = parseInt(select.value);
-                    if (!novoId) {
-                        toast('Selecione um atendente', 'info');
-                        return;
-                    }
-                    modal.hide();
-                    fetchWithToast(
-                        window.baseUrl + 'api/atendimentos.php?action=transferir',
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ atendimento_id: currentAtendimentoId, atendente_id: novoId })
-                        },
-                        'Transferência realizada',
-                        'Falha na transferência'
-                    ).then(() => location.reload());
-                });
-
-                modalElement.addEventListener('hidden.bs.modal', function () {
-                    this.remove();
-                });
-            })
-            .catch(err => {
-                console.error(err);
-                toast('Erro ao carregar lista de atendentes', 'error');
-            });
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    const modalElement = document.getElementById(modalId);
+                    const modal = new bootstrap.Modal(modalElement, { backdrop: 'static', keyboard: false });
+                    modal.show();
+                    const transferSelect = document.getElementById('transferSelect');
+                    const confirmBtn = document.getElementById('confirmTransferBtn');
+                    transferSelect.addEventListener('change', () => { confirmBtn.disabled = !transferSelect.value; });
+                    confirmBtn.addEventListener('click', () => {
+                        const novoId = transferSelect.value;
+                        if (!novoId) {
+                            toast('Selecione um atendente', 'info');
+                            return;
+                        }
+                        modal.hide();
+                        fetchWithToast(
+                            window.baseUrl + 'api/atendimentos.php?action=transferir',
+                            {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ atendimento_id: currentAtendimentoId, atendente_id: parseInt(novoId) })
+                            },
+                            'Transferência realizada',
+                            'Falha na transferência'
+                        ).then(() => location.reload());
+                    });
+                    modalElement.addEventListener('hidden.bs.modal', function () { this.remove(); });
+                })
+                .catch(err => toast('Erro ao carregar lista de atendentes', 'error'));
+        }
     };
 
     window.finalizar = function () {
+        console.log(currentAtendimentoId)
         if (!currentAtendimentoId) return;
-
         const modalId = 'confirmFinalizarModal';
         const existingModal = document.getElementById(modalId);
         if (existingModal) existingModal.remove();
@@ -427,10 +632,7 @@ window.initChat = function () {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
 
         const modalElement = document.getElementById(modalId);
-        const modal = new bootstrap.Modal(modalElement, {
-            backdrop: 'static',
-            keyboard: false
-        });
+        const modal = new bootstrap.Modal(modalElement, { backdrop: 'static', keyboard: false });
         modal.show();
 
         document.getElementById('confirmFinalizarBtn').addEventListener('click', () => {
@@ -452,7 +654,7 @@ window.initChat = function () {
         });
     };
 
-    // Eventos do socket
+    // Socket events
     socket.on('novoAtendimento', (data) => {
         carregarAtendimentos();
         toast('Novo atendimento recebido', 'info');
@@ -460,26 +662,35 @@ window.initChat = function () {
 
     socket.on('novaMensagem', (data) => {
         carregarAtendimentos();
-        if (currentAtendimentoId && data.atendimento_id == currentAtendimentoId) {
-            carregarMensagens(currentAtendimentoId);
-            toast('Nova mensagem do cliente', 'info');
-        } else {
+        if (currentAtendimentoId && data.atendimento_id == currentAtendimentoId && currentClienteId) {
+            carregarMensagensPorCliente(currentClienteId).then(messages => {
+                renderizarMensagens(messages);
+                toast('Nova mensagem do cliente', 'info');
+            });
+        } else if (data.atendimento_id) {
             highlightConversation(data.atendimento_id);
         }
     });
 
     function highlightConversation(atendimentoId) {
-        const item = document.querySelector(`.conversation-item[data-id='${atendimentoId}']`);
-        if (item) {
-            item.style.fontWeight = 'bold';
-            setTimeout(() => item.style.fontWeight = '', 3000);
+        const cliente = clientesList.find(c => c.ultimo_atendimento_id == atendimentoId);
+        if (cliente) {
+            const item = document.querySelector(`.conversation-item[data-cliente-id='${cliente.cliente_id}']`);
+            if (item) {
+                item.style.fontWeight = 'bold';
+                setTimeout(() => item.style.fontWeight = '', 3000);
+            }
         }
     }
 
-    // Polling de fallback
+    // Polling fallback
     setInterval(() => {
         if (document.getElementById('listaAtendimentos')) carregarAtendimentos();
-        if (currentAtendimentoId) carregarMensagens(currentAtendimentoId);
+        if (currentClienteId && currentAtendimentoId) {
+            carregarMensagensPorCliente(currentClienteId).then(messages => {
+                renderizarMensagens(messages);
+            });
+        }
     }, 5000);
 
     carregarAtendimentos();
@@ -497,7 +708,6 @@ window.initChat = function () {
     window.carregarAtendimentos = carregarAtendimentos;
 };
 
-// Carregamento direto (atendimento.php)
 if (document.getElementById('listaAtendimentos')) {
     window.initChat();
 }
